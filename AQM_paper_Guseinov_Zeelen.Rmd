@@ -1,0 +1,1956 @@
+---
+title: "**When Do Political Opportunities Matter? Elite Ethnic Composition and Dissident Tactical Choice in Civil Conflicts**"
+author: 
+  - "Ruslan Guseinov"
+  - "Maaike Arienne Zeelen"
+output:
+  bookdown::pdf_document2:
+    toc: false
+    toc_depth: 1
+    number_sections: false
+    includes:
+      in_header: null
+linestretch: 2
+indent: true
+fontsize: 12pt
+geometry: left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm
+date: "`r Sys.Date()`"
+bibliography: references.bib
+header-includes:
+  - \setcounter{secnumdepth}{0}
+  - \usepackage{amsthm}
+  - \newtheorem{hyp}{Hypothesis}
+  - \usepackage{pdflscape}
+abstract: |
+  Why do some dissident campaigns adopt nonviolent tactics while others turn to violence? Building on political opportunity theory, we argue that ethnic fragmentation within ruling elites and cross-ethnic power-sharing increase the attractiveness of nonviolent campaigns by enabling elite defections and constraining regime repression. Together, these mechanisms should enhance the expected effectiveness of nonviolent mobilization relative to violent alternatives. We test this argument using random-effects logistic regression models to assess whether elite ethnic fragmentation predicts dissident tactical choice. The results reveal little systematic relationship between elite fragmentation or power-sharing and the likelihood that dissidents choose nonviolent over violent strategies. Overall, the findings suggest that while ethnic fragmentation within ruling elites may matter for regime stability and campaign outcomes, it does not systematically shape dissidents’ initial choice of tactics, challenging expectations derived from political opportunity theory.
+---
+```{=latex}
+\renewcommand{\tableofcontents}{}
+\newpage
+```
+
+```{r setup, include=FALSE}
+### Knitr setup: global chunk options and output configuration
+knitr::opts_chunk$set(
+  echo    = FALSE,    # hide code from output
+  warning = FALSE,    # suppress warnings
+  message = FALSE,    # suppress package loading messages
+  include = FALSE     # hide code
+)
+
+## Choose output format based on knitr output type
+stargazer_opt <- ifelse(knitr::is_latex_output(), "latex", "html")
+
+## Clear environment
+rm(list = ls())
+
+### Load required packages; install missing ones if necessary
+p_needed <- c(
+  "tidyverse",        # dplyr, ggplot2, tidyr throughout
+  "lme4",             # glmer for RE logit
+  "MASS",             # mvrnorm in OVA simulation functions
+  "kableExtra",       # kbl, kable_styling for all tables
+  "patchwork",        # combining histogram + density plot
+  "bookdown",         # pdf_document2, cross-referencing
+  "countrycode",      # datacollection.R country coding
+  "pROC",             # AUC-ROC model fit
+  'modelsummary',     # For summary tables
+  "car",              # For model fit
+  "DHARMa",           # For model fit
+  "splines"           # for splines model
+)
+
+## Identify installed packages
+packages <- rownames(installed.packages())
+
+## Determine which required packages are missing
+p_to_install <- p_needed[!(p_needed %in% packages)]
+
+## Install missing packages
+if (length(p_to_install) > 0) {
+  install.packages(p_to_install) 
+}
+
+## Load all required packages into session
+sapply(p_needed, require, character.only = TRUE)
+
+### Load custom functions
+## Source simulation and helper functions for OVA framework
+source('ova_sim_functions.R')    # use observed value approach (OVA) simulation functions
+
+### Load datasets
+## Main dataset used for analysis
+df <- readRDS('df_EthnicElite_DissidentTactics.rds')
+
+## Auxiliary dataset: lost campaigns summary (drop first column)
+lost_campaigns_table <- read.csv('lost_campaigns.csv') %>% dplyr::select(-1)
+```
+
+
+\section{Introduction}
+Why do some dissidents pursue their political objectives through nonviolent campaigns while others resort to violence? One important strand of literature looks at ethnicity. Many campaigns unfold along ethnic lines [@thurber2018ethnic]. Existing research focuses primarily on the ethnic characteristics of dissidents and the populations from which they mobilize. Yet ethnic conflicts involve actors on both sides of the line. 
+
+This paper contributes to the literature by shifting attention from the ethnic characteristics of dissidents to the ethnic composition of the ruling elites. Specifically we argue that ethnic fragmentation within ruling coalitions shapes dissidents’ strategic choice between violent and nonviolent tactics. Drawing on political opportunity theory, we contend that campaign leaders select tactics based on their expected likelihood of success. Nonviolent campaigns are most attractive when dissidents anticipate elite defections and believe that repression will be limited or ineffective. Ethnically fragmented ruling elites create precisely these conditions. Fragmentation weakens coordination within the ruling coalition, increasing the likelihood that political and security elites defect during periods of mass mobilization. At the same time, ethnic divisions reduce the coherence and effectiveness of state repression by complicating both decision-making and implementation. As a result, ethnic fragmentation increases the expected benefits and reduces the expected costs of nonviolent mobilization relative to violent alternatives. 
+
+The argument further extends to the distribution of power within ruling coalitions: where power is shared more evenly among ethnic groups, coordination becomes more difficult and repression less cohesive, further increasing the attractiveness of nonviolent campaigns. The paper therefore expects dissident campaigns operating under more ethnically fragmented and power-sharing ruling coalitions to be more likely to adopt nonviolent rather than violent tactics.
+
+This argument speaks to a broader question in the study of political conflict. Research on campaign tactics emphasizes the importance of elite defections and repression, yet we know less about the factors that shape these processes. By examining the ethnic composition of ruling elites, this paper evaluates whether a central feature of ethnic power relations influences the strategic environment facing dissidents. In doing so, it connects research on ethnic politics to theories of campaign tactic choice.
+
+To evaluate this argument, we combine data on maximalist dissident campaigns from the NAVCO 2.1 dataset with measures of ethnic power relations from the Ethnic Power Relations (EPR) project. Using random effects logistic regression models, we examine whether variation in the ethnic structure of ruling elites predicts campaign tactic choice. Contrary to theoretical expectations, the results provide little evidence that ethnic fragmentation or the distribution of power among ruling ethnic groups systematically influences whether dissidents adopt violent or nonviolent tactics. These null findings remain robust across several alternative specifications and subsamples.
+
+The findings contribute to the literature on campaign tactics by suggesting that factors associated with elite defections and repression do not necessarily translate into differences in dissidents' initial tactical choices. They also contribute to the literature on ethnic politics by indicating that ethnic power structures may be more important for explaining conflict dynamics and outcomes than for explaining whether dissidents choose violent or nonviolent forms of contention.
+
+
+
+\section{Ethnicity and Campaign Tactic Choice}
+
+A campaign is a sustained collective effort to achieve a political objective, such as regime change, democratization, or territorial self-determination. Campaigns differ in the tactics they employ. Nonviolent campaigns rely on methods such as protests, strikes, boycotts, and sit-ins. Violent campaigns rely on armed force, including guerrilla warfare, insurgency, and terrorism.
+
+Research has long argued that ethnicity shapes campaign tactics. Existing explanations generally focus on the ethnic characteristics of dissidents, campaigns, or populations. One line of research emphasizes political exclusion, showing that excluded ethnic groups are more likely to engage in violent conflict than politically included groups [@cederman2010ethnic; @pischedda2020ethnic]. A second line of research examines the ethnic composition of campaigns and societies, arguing that ethnic structures influence the effectiveness of violent and nonviolent resistance [@chenoweth2011civil; @thurber2018ethnic; @manekin_effective_2022]. 
+
+Despite their differences, these explanations focus on characteristics of challengers rather than incumbents. Much less attention has been devoted to the ethnic composition of ruling elites.
+ 
+
+\section{Political Opportunities Shape Campaign Tactic Choice}
+
+To understand how the ethnic composition of ruling elites may influence campaign tactics, it is first necessary to explain how dissident organizations choose between violent and nonviolent resistance. Previous literature has shown that the choice between a violent or nonviolent campaign is a strategic decision made before a campaign begins [@schock2005unarmed; @cunningham2013understanding; @cunningham_strategies_2017]. The underlying assumption is that dissidents select the tactic they expect offers the greatest likelihood of achieving their political objectives. Political opportunity theory explains this choice by emphasizing how opportunities and constraints in the political environment shape the expected success of alternative strategies [@carey2009protest; @young2011veto; @chenoweth_can_2017]. Campaign leaders weigh how the political environment shifts the likelihood of success of each campaign type.
+
+
+The effectiveness of these campaigns depends on several political opportunities that shape their prospects for success. Two opportunities are particularly important: the potential to induce defections among regime supporters and the ability to sustain broad-based participation in the face of state repression. 
+
+The first opportunity stems from the central role that elite and security-force defections play in the success of nonviolent resistance. Nonviolent campaigns rely on their ability to induce defections among regime supporters [@cunningham_strategies_2017; @arendt1970violence; @sharp1973politics; @nepstad2011nonviolent; @schock2005unarmed; @chenoweth2011civil; @chenoweth2017state]. Nonviolent mobilization can weaken regime stability by creating uncertainty about the regime's future survival and exposing divisions within the ruling coalition. As elites, bureaucrats and security personnel withdraw their support or refuse orders to repress dissent, the regime loses administrative and coercive capacity, making it increasingly difficult to maintain political control [@nepstad2011nonviolent; @chenoweth2017state]. Nonviolent resistance is therefore more likely to be attractive when dissidents expect elite and security-force loyalties to be fragile rather than cohesive.
+
+Second, nonviolent campaigns depend on their ability to mobilize broad segments of society. Large-scale participation increases a campaign's capacity to disrupt political and economic activity, demonstrate the breadth of opposition to the regime, and exert pressure on incumbents [@chenoweth2011civil; @schock2005unarmed]. Arrests, violence, and intimidation increase the costs of participation and can discourage individuals from joining collective action [@sullivan2016undermining]. Repression may also disrupt organizational networks by targeting activists responsible for coordinating protests and maintaining participation [@sullivan2016undermining]. As participation falls, so does the campaign's power, making success less likely. Consequently, dissidents are less likely to select nonviolent tactics when they expect the state to respond with severe repression [@edwards2021violence].
+
+Taken together, nonviolent campaigns are most attractive when dissidents expect mobilization to generate defections among regime supporters and when repression is unlikely to prevent sustained collective action. Under such circumstances, nonviolent tactics provide a credible pathway to achieving political objectives. When opportunities for defection are limited and repression is expected to be severe, the anticipated benefits of nonviolent resistance decline relative to its costs. Dissidents may therefore conclude that peaceful resistance is unlikely to succeed and instead turn to violent forms of contention [@schock2005unarmed; @cunningham2013understanding; @edwards2021violence].
+
+
+\section{Ethnic Fragmentation Creates Political Opportunities for Nonviolent Resistance}
+
+The preceding discussion identified two political opportunities that are particularly important for the attractiveness of nonviolent resistance: the prospect of elite defections and the state's capacity to sustain repression. The remaining question is what factors shape these opportunities. This study argues that one important source of variation lies in the ethnic composition of ruling elites. Ethnic fragmentation influences both the likelihood of elite defection and the effectiveness of repression, thereby shaping the expected success of nonviolent mobilization relative to violent alternatives.
+
+Specifically, ethnic fragmentation influences whether dissident organizations choose violent or nonviolent tactics by shaping two political opportunities central to nonviolent resistance: the likelihood of elite defections and the state's capacity to repress collective action. By increasing the prospects for elite defection and limiting the effectiveness of repression, ethnic fragmentation raises the expected benefits and lowers the expected costs of nonviolent mobilization.
+
+Ethnic fragmentation increases the likelihood of elite defection by weakening coordination within the ruling coalition. When elites are organized into distinct ethnic blocs, their ability to jointly sustain loyalty to the regime becomes more fragile because political behavior is structured through segmented networks rather than a unified elite [@cederman2010ethnic]. This reduces the ability of incumbents to generate credible commitments about mutual support and increases uncertainty about how other elites will behave in moments of political stress. As a result, elites face a coordination problem: even those who might prefer regime continuity cannot be confident that others will remain loyal, making defection a safer individual strategy when political conditions begin to shift [@svolik2012politics; @roessler2011enemy; @geddes1999we].
+
+This coordination problem becomes especially consequential under conditions of political contestation, such as during nonviolent mobilization. Large-scale protest signals regime vulnerability and creates uncertainty about the regime’s future stability. In ethnically fragmented coalitions, these signals are harder to interpret and coordinate around, because elites lack strong cross-bloc trust and shared expectations about collective action [@brubaker1998ethnic]. As a result, even limited signs of wavering support can trigger anticipatory or sequential defection, as elites seek to avoid being left in an increasingly unstable coalition. Ethnic fragmentation therefore increases the probability that nonviolent campaigns will generate elite defections by amplifying uncertainty and undermining coordinated loyalty responses within the ruling elite [@cederman2010ethnic; @svolik2012politics; @roessler2011enemy].
+
+
+Ethnic fragmentation also reduces the expected effectiveness of state repression by increasing the political risks associated with its use. Authorizing violent repression can exacerbate divisions within ruling coalitions because coercive actions may raise the perceived costs of continued loyalty for some elites. This dynamic increases the likelihood of intra-elite disagreement over repression and can generate additional defections among political and security elites. Anticipating these risks, leaders in fragmented coalitions may be more hesitant to rely on severe repression as a strategy of control [@svolik2012politics; @roessler2011enemy].
+
+
+These constraints extend into the implementation of repression itself. Where military and police institutions are divided along ethnic lines, coercive capacity becomes fragmented, making it more difficult to ensure consistent compliance with orders [@hendrix2019ethnicity]. Ethnic divisions within the security apparatus can weaken command-and-control, reduce willingness to carry out repression against certain groups, and increase opportunities for selective noncompliance or hesitation. As a result, even when repression is authorized, its execution is likely to be less coordinated and less effective than in regimes characterized by more cohesive coercive institutions [@cederman2010ethnic; @roessler2011enemy].
+
+Taken together, ethnic fragmentation creates a political environment in which nonviolent resistance becomes a more attractive strategic option. Greater opportunities for elite defection increase the likelihood that nonviolent mobilization can undermine regime support, while constraints on repression reduce the costs of sustained participation. Because both mechanisms improve the expected prospects for success of nonviolent campaigns relative to violent alternatives, dissident organizations operating in more ethnically fragmented regimes should be more likely to adopt nonviolent tactics.
+
+\begin{hyp}
+Greater ethnic fragmentation in ruling elites increases the likelihood that dissident campaigns adopt nonviolent tactics rather than violent tactics.
+\end{hyp}
+
+
+While ethnic fragmentation captures the number of ethnic groups represented within the ruling coalition, coalition cohesion also depends on how power is distributed among those groups. Fragmented coalitions are not necessarily unstable if one group clearly dominates decision-making and possesses the capacity to discipline potential challengers [@svolik2012politics]. Conversely, when power is distributed more evenly across ethnic groups, individual blocs possess greater autonomy and bargaining leverage, making coordinated loyalty more difficult to sustain [@roessler2011enemy; @wimmer2009ethnic]. One great power is also capable of pushing through a unified repression strategy. Power sharing therefore represents a second dimension of elite fragmentation that may further increase opportunities for elite defection and constrain effective repression.
+
+More equal distributions of power create a coalition of mutual veto players whose cooperation is necessary for regime stability. Because no single group can reliably impose its preferences on others, coalition maintenance depends on continuous bargaining among actors with comparable resources and independent support bases [@svolik2012politics; @gandhi2007authoritarian]. These conditions increase the risk of elite defection during periods of political uncertainty and make the implementation of repression more difficult to coordinate [@roessler2011enemy]. As a result, nonviolent mobilization should be particularly attractive in regimes characterized by extensive power sharing.
+
+\begin{hyp}
+Power sharing among ethnic groups in the ruling elite increases the likelihood that dissident campaigns adopt nonviolent tactics rather than violent tactics.
+\end{hyp}
+
+\section{Data and Methods}
+\subsection{Data description}
+We test our hypotheses using the NAVCO 2.1 dataset, which documents 384 maximalist anti-government campaigns from 1945 to 2013 [@chenoweth2011civil]. The unit of analysis is the campaign onset, as our theory concerns the initial choice between violent and nonviolent resistance. Following NAVCO coding protocols, campaigns are categorized by their main tactic into two mutually exclusive groups: violent and nonviolent. We operationalize this distinction as a binary variable (1 = violent, 0 = nonviolent). Our final sample includes `r sum(df$NVC2.1_VIOL)` violent and `r sum(df$NVC2.1_NONVIOL)` nonviolent campaign onsets^[The most significant reason why the number of campaigns we have in the panel dataset differs from the total number of maximalist campaigns concerns country coding. We construct a panel dataset of indepedent country-years based on Correlates of War (CoW) list of independent states. We merge our panel data using NAVCO-assigned CoW country codes. However, in some cases, countries of a campaign location are not independent at the campaign onset year and thus lost from the data we use in the analysis. For example, there is a campaign geographically located in Algeria in 1952, though Algeria gained independence only in 1962. A naive solution would be assigning socio-economic characteristics of the "target" country - France in case of Algeria, though it would severely bias the results as if the campaign took place in France. We partly address this issue by excluding territorial campaigns in the robustness check section. Table \@ref(tab:lost-campaigns-appendix) in Appendix C lists all these lost campaigns.].
+
+Our key independent variables come from the Ethnic Power Relations (EPR) Core Dataset [@vogt2015integrating], which records politically relevant ethnic groups and their access to state power.
+
+For Hypothesis 1, we follow Hendrix and Salehyan [-@hendrix2019ethnicity] and measure ethnic elite fragmentation using the Included Fractionalization Index (IFI):
+$$
+IFI = 1 - \sum_{i=1}^{N} s_i^2
+$$
+where $s_i$ is the population share of included ethnic group ($i$)^[EFI follows an analogous construction, where $s_i$ would be the population share of excluded ethnic groups.]. IFI captures the fragmentation of the ruling coalition. Unlike a simple count of included groups, it also accounts for their relative size. Higher values indicate more fragmented ruling coalitions, while lower values indicate that executive power is concentrated among fewer ethnic groups. 
+
+
+For Hypothesis 2, we use a binary indicator derived from the highest EPR access-to-power category to distinguish between concentrated and shared executive power [@vogt2015integrating; @hlatky2025ethnic]. For each campaign, the variable is coded as 1 if the highest status held by any politically relevant ethnic group is Senior Partner, indicating a meaningful power-sharing arrangement where executive authority is shared among multiple groups. It is coded as 0 if the highest status is Monopoly (exclusive control by a single group) or Dominant (one group controls the executive while others hold subordinate positions).
+
+
+To reduce confounding, we control for standard economic, demographic, and political factors that may be correlated with both ethnic elite structures and campaign tactics. Economic controls include GDP per capita, GDP growth, and logged population size. Demographic controls include youth bulge, measured as the share of the population aged 15–29. Political controls include executive corruption, electoral democracy (polyarchy), regime duration, and peace years since the last maximalist campaign [@gapminderGDPCapitaConstant2024; @unitednationsWorldPopulationProspects2024; @coppedgeVDemCodebookV142024].
+
+We also include excluded ethnic fractionalization (EFI), constructed analogously to IFI but using the population shares of excluded ethnic groups rather than included groups [@hendrix2019ethnicity]. This controls for ethnic heterogeneity among excluded populations, ensuring that effects attributed to ruling coalition fragmentation are not confounded by broader ethnic structure. Finally, we control for whether a campaign is initiated by an included ethnic group to ensure that results are not driven by systematic differences between campaigns initiated by included versus excluded groups.
+
+
+Our theory focuses on pre-onset strategic decisions about campaign tactics. We therefore use lagged values of all independent variables from the previous year to capture the political environment in which these decisions are made.
+
+Table \@ref(tab:descriptive-stats) presents descriptive statistics for all variables, separately for violent and nonviolent campaigns. In the raw means, violent campaigns exhibit slightly higher levels of ethnic elite fragmentation (IFI) and more inclusive ethnic power-sharing arrangements within the executive compared to nonviolent campaigns. 
+
+Missing data is limited and does not pose a systematic concern for the analysis. In total, only `r round(sum(is.na(df$epr_IFI_l)) / nrow(df) * 100, 2)`% of IFI values and `r round(sum(is.na(df$epr_highest_rank)) / nrow(df) * 100, 2)`% of EPR highest access-to-power observations are missing.
+
+
+```{r descriptive-stats, results='asis', include = TRUE}
+### Create descriptive statistics table
+
+## Build summary dataset and define binary tactic grouping
+summarydata <- df %>%
+  mutate(
+    Tactics = case_when(
+      onset_type == "Nonviolent" ~ "Nonviolent",
+      TRUE                       ~ "Violent"
+    )
+  ) %>%
+  ## Select outcome, key predictors, and controls for balance table
+  dplyr::select(
+    Tactics,
+    "Included Fractionalization Index" = epr_IFI_l,  # Main independent variable for Hypothesis 1
+    "Executive Power Sharing"    = epr_highest_rank, # Main independent variable for Hypothesis 2
+    
+    # Control variables
+    "Excluded Fractionalization Index"                = epr_EFI_l,
+    "Ethnic Group in Power Participation"   = egip_participated_l,
+    "ln(GDP per capita)" = log_gdp_pcap_l,
+    "ln(Population)"     = pop_log_l,
+    "Polyarchy"          = v2x_polyarchy_l,
+    "Executive Corruption" = v2x_execorr_l,
+    "ln(Regime Duration)"  = log_v2regdur_l,
+    "Peace Years"          = peace_years_l
+  )
+
+### Generate balance table comparing violent vs non-violent campaigns
+## Compute descriptive statistics by tactic group
+datasummary_balance(
+  ~Tactics,
+  data    = summarydata,
+  title   = "Descriptive Statistics by Campaign Tactics (NAVCO 2.1 Onsets)",
+  label   = "descriptive-stats",
+  output  = "kableExtra",
+  fmt     = 2,
+  dinm    = FALSE
+) %>%
+  ## Format table appearance for LaTeX output
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width    = FALSE
+  ) %>%
+  
+  ## Add table notes explaining variables and coding choices
+  footnote(
+    general = paste(
+      "All variables are one-year lagged.",
+      "Included Fractionalization Index (IFI): Higher values indicate greater fragmentation among included ethnic groups.",
+      "Executive Power Sharing (binary): 1 = shared executive authority among ethnic groups, 0 = indicate concentrated executive control."
+    ),
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  ) %>%
+  
+  ## Create section header for main variables
+  pack_rows(
+    "Main Variables",
+    start_row = 1,
+    end_row = 2,
+    bold = TRUE
+  ) %>%
+  
+  ## Create section header for control variables
+  pack_rows(
+    "Control Variables",
+    start_row = 3,
+    end_row = 10,
+    bold = TRUE
+  ) 
+```
+
+\subsection{Modeling approach}
+```{r variation-IV, include=FALSE}
+### Test variation in key independent variables across groups
+## Define function to decompose variance into within- and between-group components
+## Also computes Intraclass Correlation Coefficient (ICC) as a clustering measure
+
+variance_decomp <- function(data, var, group) {
+  
+  ## Calculate group-level statistics
+  data_grouped <- data %>%
+    group_by(.data[[group]]) %>%
+    mutate(
+      group_mean = mean(.data[[var]], na.rm = TRUE),
+      deviation = .data[[var]] - group_mean
+    ) %>%
+    ungroup()
+  
+  ## Calculate Total Variation
+  overall_sd <- sd(data_grouped[[var]], na.rm = TRUE)
+  
+  ## Calculate Within-Group Variation
+  within_sd <- sd(data_grouped$deviation, na.rm = TRUE)
+  
+  ## Calculate Between-Group Variation
+  between_sd <- data_grouped %>%
+    distinct(.data[[group]], group_mean) %>%
+    summarise(
+      sd = sd(group_mean, na.rm = TRUE)
+    ) %>%
+    pull(sd)
+  
+  ## Calculate Intraclass Correlation Coefficient (ICC)
+  # Indicates proportion of total variance explained by group membership
+  icc <- between_sd^2 / (between_sd^2 + within_sd^2)
+  
+  ## Return results as a tidy tibble
+  tibble(
+    variable = var,
+    grouping = group,
+    overall_sd = overall_sd,
+    within_sd = within_sd,
+    between_sd = between_sd,
+    ICC = icc
+  )
+}
+
+## Define key independent variables
+vars <- c("epr_IFI_l", "epr_highest_rank")
+
+## Decompose variance by country
+variance_results_country <- map_dfr(
+  vars,
+  variance_decomp,
+  data = df,
+  group = "cow"
+)
+```
+
+Because the dependent variable captures whether a campaign onset is violent or nonviolent, we estimate logistic regression models. The focus of the analysis is on the choice of tactic at campaign onset, rather than the timing or duration of campaigns; a binary logit specification is therefore appropriate. As we do not predict the duration of events, there is no need for advanced binary choice models such as a complementary log-log.
+
+To account for the panel structure of the data - where multiple campaign onsets may occur within the same country - we include country-level varying intercepts. This allows baseline differences in the propensity toward violent versus nonviolent campaign onset to vary across countries.
+
+Including a country fixed effect to control for the time-invariant unobserved factors such as culture or geography is theoretically appealing and common in the peace science literature [@butcher2016manufacturing; @ives2022greed; @fearon2003ethnicity; @jung2025motivating]. Ethnic configurations change slowly over time, and exploratory analysis indicates limited within-country variation in both IFI and EFI. As a result, a fixed-effects specification would rely primarily on the relatively small subset of countries that experience meaningful changes in ethnic inclusion structures across campaign onsets. Given that our theoretical argument concerns how both cross-national differences and temporal variation in elite ethnic structures shape strategic choices, we retain both sources of variation. A random-intercepts specification is therefore more consistent with the structure of the data and the substantive scope of the hypotheses.
+
+We acknowledge, however, that random-effects models rely on a stronger assumption than fixed effects—namely that country-specific unobserved heterogeneity is uncorrelated with the included regressors. If this assumption is violated, coefficient estimates may be biased [@clark2015should]. Despite this limitation, the random-intercepts approach represents an appropriate trade-off between bias and efficiency in this setting, given the limited within-country variation in key predictors. To assess the sensitivity of our results to this assumption, we follow Bell and Jones [-@bell2015explaining] and  estimate an alternative Within-Between Random Effect (REWB) model specification as a robustness check.
+
+For Hypothesis 1, our model specification is:
+$$
+\begin{aligned}
+& \text{violent}_{it} \sim \text{Bernoulli}(\pi_{it}) \\[0.3em]
+& \log\left(\frac{\pi_{it}}{1-\pi_{it}}\right) = \beta_0 
++ \beta_1 (\text{IFI})_{it-1} 
++ \beta_2 (\text{EFI})_{it-1} 
++ \mathbf{X}'_{it-1}\boldsymbol{\gamma} + \alpha_{[j]i} \\[0.3em]
+& \alpha_j \sim \mathcal{N}(\mu_\alpha, \sigma^2_\alpha)
+\end{aligned}
+$$
+where $\mathbf{X}_{it-1}$ denotes the vector of lagged control variables and $u_i$ is a country-specific random intercept capturing unobserved time-invariant heterogeneity.
+
+For Hypothesis 2, our model specification is:
+$$
+\begin{aligned}
+& \text{violent}_{it} \sim \text{Bernoulli}(\pi_{it}) \\[0.3em]
+& \log\left(\frac{\pi_{it}}{1-\pi_{it}}\right) = \beta_0 
++ \beta_1 (\text{Senior Partner})_{it-1} 
++ \beta_2 (\text{EFI})_{it-1} 
++ \mathbf{X}'_{it-1}\boldsymbol{\gamma} + \alpha_{[j]i} \\[0.3em]
+& \alpha_j \sim \mathcal{N}(\mu_\alpha, \sigma^2_\alpha)
+\end{aligned}
+$$
+where $\text{Senior Partner}$ is a binary indicator of whether the highest status held by any politically relevant ethnic group is Senior Partner, $\mathbf{X}_{it-1}$ denotes the vector of lagged control variables and $u_i$ is a country-specific random intercept capturing unobserved time-invariant heterogeneity.
+
+For uncertainty calculations, we follow a King's simulation approach [@king2000making]. This approach is also well-established in peace science literature [@butcher2016manufacturing]. Instead of reporting coefficients and their significance, we calculate predicted probabilities as the main quantity of interest via an observed value approach (OVA), meaning we simulate the predicted probabilities for all observations and then calculate the mean of them^[We report coefficients only in the cross-validation robustness check.]. We simulate over the full available range of the vocal variable values. For the essay, we define `sim_ova_range` function for the OVA simulations, allowing to calculate predicted probabilities in just few lines of code. We also define a `sim_ova_fd` function, allowing to calculate simulated first differences. It also allows for different CI levels, seeds, number of values and focal variable ranges at the researcher's discretion.
+
+\section{Results}
+\subsection{Hypothesis 1}
+```{r H1-analysis, fig.cap="Simulated predicted probabilities of a violent tactic choice over a range of included fractionalization index values", fig.align = 'center', out.width="85%", include = TRUE}
+### Define multilevel logit model for Hypothesis 1
+## Define a formula for H1
+formula_h1 <- NVC2.1_VIOL ~ epr_IFI_l + epr_EFI_l + egip_participated_l +
+  log_gdp_pcap_l + pop_log_l + v2x_polyarchy_l + v2x_execorr_l +
+  log_v2regdur_l + peace_years_l + (1 | cow)  # random intercept by country
+
+## Estimate mixed-effects logistic regression model
+model1 <- glmer(formula_h1,
+                data = df,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa",
+                                       optCtrl = list(maxfun = 2e5))) # apply an optimizer for convergence
+
+### Simulate predicted probabilities using observed value approach
+## Set number of simulations for uncertainty estimation
+simulation_number = 1000
+
+## Run OVA simulation varying IFI (epr_IFI_l)
+ova_ifi_full_m1  <- sim_ova_range(model1,        
+                                   focal_var = "epr_IFI_l", 
+                                   nsim = simulation_number,
+                                   vcov_matrix = vcov(model1))$result %>% mutate(type = "Full Sample")
+
+### Plot predicted probabilities from simulation output
+## Create plot for predicted probabilities 
+ggplot(ova_ifi_full_m1,
+       aes(x = focal_value, y = mean)) +
+  geom_line(linewidth = 0.9, color = "#C0392B") +
+  geom_hline(yintercept = round(sum(df$NVC2.1_VIOL) / nrow(df), 2), # a benchmark probability dashed line
+             linetype = 'dashed', color = 'grey', alpha = 0.8) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), 
+              alpha = 0.15, fill = "#C0392B", color = NA) +
+  geom_rug(
+    data = df %>% drop_na(epr_IFI_l),
+    aes(x = epr_IFI_l),
+    inherit.aes = FALSE,
+    color = "#C0392B", alpha = 0.3,
+    sides = "b"
+  ) + 
+  labs(x     = "IFI (0 = fully concentrated, 1 = fully fragmented)", 
+       y     = "Predicted Probability of a \n Violent Campaign", 
+       caption = paste0(
+         simulation_number, " simulations, 95% CI\n",
+         "Note: The dashed line represents the empirical probability of a violent event in the sample"
+       )) +
+  theme_bw() +
+  theme(
+    axis.title.y     = element_text(margin = margin(r = 10)),
+    panel.grid.minor = element_blank(),
+    plot.caption     = element_text(hjust = 1, color = "grey50")
+  )
+```
+To test the first hypothesis, we estimate a logit model of the violent tactic choice, according to the H1 model specification^[Regression coefficients are available in Table \@ref(tab:base-model-table) in Appendix C]. Figure \@ref(fig:H1-analysis) shows the simulated predicted probabilities of a violent tactic choice over a full available range of observed IFI values. Despite a upward trend - from `r round(ova_ifi_full_m1$mean[1], 2)` at IFI equal to `r round(ova_ifi_full_m1$focal_value[1], 2)` to `r round(ova_ifi_full_m1$mean[50], 2)` at IFI equal to `r round(ova_ifi_full_m1$focal_value[50], 2)` - confidence intervals that encompass `r round(sum(df$NVC2.1_VIOL) / nrow(df), 2)`, which is the empirical probability of a violent campaign, do not allow us to claim that with the increasing IFI the rebels would prefer violence over nonviolence.
+
+```{r H1-confusion-matrix, results='asis', include = TRUE}
+### Create confusion matrix ###
+## Set same seed as simulations for reproducibility
+set.seed(1234)
+
+## Define the number of observations
+n_total <- nrow(df)
+
+## Randomly select 2/3 of observations for training
+train_idx <- sample(1:n_total, size = floor(2/3 * n_total), replace = FALSE)
+
+## Select remaining 1/3 used as test set
+test_idx  <- setdiff(1:n_total, train_idx)
+
+## Construct training dataset
+df_train <- df[train_idx, ]
+
+## Estimate mixed-effects logistic regression on training data
+model1_train  <- glmer(formula_h1,        # random intercept by country
+                       data = df_train,
+                       family = binomial(link = "logit"),
+                       control = glmerControl(optimizer = "bobyqa",
+                                              optCtrl = list(maxfun = 2e5)))
+
+## Extract countries that are present in the training sample
+trained_cows <- rownames(ranef(model1_train)$cow)
+
+## Construct test dataset
+df_test <- df[test_idx, ] %>%
+  filter(as.character(cow) %in% trained_cows) %>%  # test is only with the trained countries
+  drop_na(epr_IFI_l, epr_EFI_l, egip_participated_l, log_gdp_pcap_l, 
+          pop_log_l, v2x_execorr_l, v2x_polyarchy_l, log_v2regdur_l, 
+          peace_years_l) # remove observations with missing values in model covariates
+
+## Predict probabilities of violence for test data
+pred_test_prob <- predict(model1_train, newdata = df_test, type = "response")
+
+## Define actual outcome labels
+actual_test <- ifelse(df_test$NVC2.1_VIOL == 1,
+                      "Violent", "Nonviolent")
+
+## Classify predictions using a 0.5 probability threshold
+pred_test   <- ifelse(pred_test_prob >= 0.5, "Violent", "Nonviolent")
+
+## Compute ROC curve and AUC
+roc_obj  <- roc(response  = ifelse(actual_test == "Violent", 1, 0),
+                predictor = pred_test_prob,
+                quiet     = TRUE)
+auc_val  <- as.numeric(auc(roc_obj))
+
+## Construct confusion matrix components
+tp <- sum(pred_test == "Violent"    & actual_test == "Violent")
+tn <- sum(pred_test == "Nonviolent" & actual_test == "Nonviolent")
+fp <- sum(pred_test == "Violent"    & actual_test == "Nonviolent")
+fn <- sum(pred_test == "Nonviolent" & actual_test == "Violent")
+
+## Calculate metrics
+accuracy  <- (tp + tn) / (tp + tn + fp + fn)
+precision <- tp / (tp + fp)
+recall    <- tp / (tp + fn)   
+f1        <- 2 * (precision * recall) / (precision + recall)
+
+## Create confusion matrix table
+conf_df <- data.frame(
+  ` `            = c("Predicted Nonviolent", "Predicted Violent"),
+  `Actual Nonviolent` = c(as.character(tn), as.character(fp)),
+  `Actual Violent`    = c(as.character(fn), as.character(tp)),
+  check.names = FALSE
+)
+
+## Create performance metrics table
+metrics_df <- data.frame(
+  ` `                 = c("Accuracy", "Precision", 
+                          "Recall",  "F1 Score", "AUC"),
+  `Actual Nonviolent` = c(sprintf("%.3f", accuracy), 
+                          sprintf("%.3f", precision),
+                          sprintf("%.3f", recall), 
+                          sprintf("%.3f", f1),
+                          sprintf("%.3f", auc_val)),
+  `Actual Violent`    = c("", "", "", "", ""),
+  check.names = FALSE
+)
+
+## Combine confusion matrix and metrics
+bind_rows(conf_df, metrics_df) %>%
+  kbl(
+    booktabs = TRUE,
+    align    = c("l", "c", "c"),
+    caption  = "Confusion Matrix and Predictive Performance — Model 1",
+    label    = "conf-matrix-h1",
+    escape   = FALSE
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width    = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(2, extra_css = "border-bottom: 2px solid black;") %>%  # separator line
+  pack_rows("Confusion Matrix", 1, 2) %>%
+  pack_rows("Performance Metrics", 3, 7)
+```
+
+Despite an insignificant effect of IFI on a violent choice, the model as a whole demonstrates a strong predictive performance. Model fit was evaluated using out-of-sample prediction. A train-test split mode reestimation was employed to calculate classification accuracy, precision, recall, F1 scores, and the area under the receiver operating characteristic curve (AUC). Table \@ref(tab:conf-matrix-h1) reports the confusion matrix and performance metrics. With an accuracy of `r round(accuracy, 2)` and F1 score of `r round(f1, 2)`, our model in general predicts tactic choice well above a coin toss, predicting violence a bit better than the nonviolent choice. Another measure of model fit is the area under the ROC curve (AUC), showing whether our model predictions of a violent choice are better than a random draw. The AUC score of `r round(auc_val, 2)` indicates a good model fit. Figure \@ref(fig:h1-auc-roc-appendix) in Appendix A plots an AUC-ROC curve for this model. An important implication here is that the model as a whole (including the specification itself, a set of covariates and a country varying intercept) captures meaningful variation in the outcome, even though the IFI does not significantly predict a violent choice. Such results reflect a real absence of the IFI effect rather than a model misspecification.
+
+\subsection{Hypothesis 2}
+```{r H2-analysis, fig.cap="Simulated first differences for a violent tactic choice between shared and concentrated ethnic executive power", fig.align = 'center', out.width="85%", include = TRUE}
+### Define multilevel logit model for Hypothesis 2
+## Define a formula for H2
+formula_h2 <- NVC2.1_VIOL ~ epr_highest_rank + epr_EFI_l + egip_participated_l +
+  log_gdp_pcap_l + pop_log_l + v2x_polyarchy_l + v2x_execorr_l +
+  log_v2regdur_l + peace_years_l + (1 | cow)  # random intercept by country
+
+## Estimate mixed-effects logistic regression model
+model2 <- glmer(formula_h2,
+                data = df,
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa",
+                                       optCtrl = list(maxfun = 2e5))) # apply an optimizer for convergence
+
+#WARNING: A convergence issue occured. Reestiamte a model with a warm start
+sink(tempfile()) 
+all_fits_m2 <- allFit(model2)
+sink()     
+ok_fits  <- all_fits_m2[summary(all_fits_m2)$which.OK]
+llik_vals <- sapply(ok_fits, logLik)
+model2  <- ok_fits[[which.max(llik_vals)]]
+#model2@optinfo$conv$lme4 #model converged
+
+## First differences (Observed value approach)
+ova_fd_full_m2 <- sim_ova_fd(model2, focal_var = "epr_highest_rank", 
+                             val1 = 0, val2 = 1,
+                             nsim = simulation_number, vcov_matrix = vcov(model2))
+
+fd_df_full_m2 <- data.frame(fd = ova_fd_full_m2$sims)
+
+### Plot first differences from simulation output
+ggplot(fd_df_full_m2, aes(x = fd)) +
+  geom_histogram(fill = "#C0392B", alpha = 0.3, color = "#C0392B",
+                 bins = 25) +
+  geom_vline(xintercept = ova_fd_full_m2$mean,
+             color = "#C0392B", linewidth = 0.9) +
+  geom_vline(xintercept = c(ova_fd_full_m2$lower, ova_fd_full_m2$upper),
+             color = "#C0392B", linewidth = 0.7, linetype = "dashed") +
+  geom_vline(xintercept = 0,
+             color = "grey40", linewidth = 0.6, linetype = "dotted") +
+  labs(x       = "First differences for a violent tactic choice \n between shared and concentrated ethnic executive power configurations",
+       y       = "Count",
+       caption = paste0(format(simulation_number, big.mark = ","),
+                        " simulations, 95% CI")) +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+         plot.caption     = element_text(hjust = 1, color = "grey50"))
+```
+
+To test the second hypothesis, we estimate a logit model of the violent tactic choice, according to the H2 model specification^[Initially, the model did not converge with the `bobyqa` optimizer. Following Bates et al. [-@bates2015lme4], we reestimate the model with all the available optimizers. Then, we pick the model with the highest log-likelihood value among the converged models. As a result of such reesimation, we use the converged model for simulating first differences. Regression coefficients are available in Table \@ref(tab:base-model-table) in Appendix C.]. Given the binary independent variable, we calculated simulated first differences according to the observed value approach. Figure \@ref(fig:H2-analysis) shows the simulated first differences of a violent tactic choice between the shared (`epr_highest_rank` = 1) and concentrated (`epr_highest_rank` = 0) ethnic executive power configurations. The results clearly indicate that, despite a positive mean value of the first differences, there are no systematic and statistically significant differences between the effects of shared and concentrated ethnic executive power on the violent tactic choice. It contrasts with theoretical expectations where ethnic power-sharing arrangements could push the dissidents towards one repertoire of contention over the other. 
+
+```{r H2-confusion-matrix, results='asis', include = TRUE}
+### Create confusion matrix ###
+## Set same seed as simulations for reproducibility
+set.seed(1234)
+
+## Define the number of observations
+n_total <- nrow(df)
+
+## Randomly select 2/3 of observations for training
+train_idx <- sample(1:n_total, size = floor(2/3 * n_total), replace = FALSE)
+
+## Select remaining 1/3 used as test set
+test_idx  <- setdiff(1:n_total, train_idx)
+
+## Construct training dataset
+df_train <- df[train_idx, ]
+
+## Estimate mixed-effects logistic regression on training data
+model2_train  <- glmer(formula_h2,        # random intercept by country
+                       data = df_train,
+                       family = binomial(link = "logit"),
+                       control = glmerControl(optimizer = "bobyqa",
+                                              optCtrl = list(maxfun = 2e5)))
+
+## Extract countries that are present in the training sample
+trained_cows <- rownames(ranef(model2_train)$cow)
+
+## Construct test dataset
+df_test <- df[test_idx, ] %>%
+  filter(as.character(cow) %in% trained_cows) %>%  # test is only with the trained countries
+  drop_na(epr_highest_rank, egip_participated_l, log_gdp_pcap_l, 
+          pop_log_l, v2x_execorr_l, v2x_polyarchy_l, log_v2regdur_l, 
+          peace_years_l) # remove observations with missing values in model covariates
+
+## Predict probabilities of violence for test data
+pred_test_prob <- predict(model2_train, newdata = df_test, type = "response")
+
+## Define actual outcome labels
+actual_test <- ifelse(df_test$NVC2.1_VIOL == 1,
+                      "Violent", "Nonviolent")
+
+## Classify predictions using a 0.5 probability threshold
+pred_test   <- ifelse(pred_test_prob >= 0.5, "Violent", "Nonviolent")
+
+## Compute ROC curve and AUC
+roc_obj  <- roc(response  = ifelse(actual_test == "Violent", 1, 0),
+                predictor = pred_test_prob,
+                quiet     = TRUE)
+auc_val  <- as.numeric(auc(roc_obj))
+
+## Construct confusion matrix components
+tp <- sum(pred_test == "Violent"    & actual_test == "Violent")
+tn <- sum(pred_test == "Nonviolent" & actual_test == "Nonviolent")
+fp <- sum(pred_test == "Violent"    & actual_test == "Nonviolent")
+fn <- sum(pred_test == "Nonviolent" & actual_test == "Violent")
+
+## Calculate metrics
+accuracy  <- (tp + tn) / (tp + tn + fp + fn)
+precision <- tp / (tp + fp)
+recall    <- tp / (tp + fn)   
+f1        <- 2 * (precision * recall) / (precision + recall)
+
+## Create confusion matrix table
+conf_df <- data.frame(
+  ` `            = c("Predicted Nonviolent", "Predicted Violent"),
+  `Actual Nonviolent` = c(as.character(tn), as.character(fp)),
+  `Actual Violent`    = c(as.character(fn), as.character(tp)),
+  check.names = FALSE
+)
+
+## Create performance metrics table
+metrics_df <- data.frame(
+  ` `                 = c("Accuracy", "Precision", 
+                          "Recall",  "F1 Score", "AUC"),
+  `Actual Nonviolent` = c(sprintf("%.3f", accuracy), 
+                          sprintf("%.3f", precision),
+                          sprintf("%.3f", recall), 
+                          sprintf("%.3f", f1),
+                          sprintf("%.3f", auc_val)),
+  `Actual Violent`    = c("", "", "", "", ""),
+  check.names = FALSE
+)
+
+## Combine confusion matrix and metrics
+bind_rows(conf_df, metrics_df) %>%
+  kbl(
+    booktabs = TRUE,
+    align    = c("l", "c", "c"),
+    caption  = "Confusion Matrix and Predictive Performance — Model 2",
+    label    = "conf-matrix-h2",
+    escape   = FALSE
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width    = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(2, extra_css = "border-bottom: 2px solid black;") %>%  # separator line
+  pack_rows("Confusion Matrix", 1, 2) %>%
+  pack_rows("Performance Metrics", 3, 7)
+```
+
+As well as with the model 1, we test the model fit using out-of-sample prediction. Table \@ref(tab:conf-matrix-h2) reports the confusion matrix and performance metrics. All the metrics, especially F1 Score and AUC, indicate a good model fit as well. According to the confusion matrix, the model predicts violent tactic choice particularly successfully. Figure \@ref(fig:h2-auc-roc-appendix) in Appendix B plots an AUC-ROC curve for this model. In general, both models successfully capture meaningful variation in the outcome.
+
+\subsection{Assumption Diagnostics}
+
+A series of diagnostic tests were conducted for the models of both hypotheses. Variance inflation factors indicated no evidence of multicollinearity among the explanatory variables. The assumption of linearity on the logit scale was assessed by comparing the baseline specifications to models including natural spline terms for the main explanatory variables. As the spline specifications did not improve model fit, the linear specifications were retained. Furthermore, DHARMa residual diagnostics, including quantile and QQ-plot assessments, revealed no substantial deviations from model expectations and provided no evidence of serious misspecification. Influence diagnostics based on Cook's distance indicated that the results were not driven by a small number of influential observations. Detailed diagnostic results are reported in Appendix D (Tables \@ref(tab:app-vif)–\@ref(tab:random-effects-variance) and Figures \@ref(fig:qq-m1)-\@ref(fig:DHARMa-m2)).
+
+
+\subsection{Robustness Checks}
+
+We conduct four robustness checks to assess the stability of the findings^[An important note here is that we do not compare the model fit of these specifications because of the different samples, which make the models incomparable in terms of model fit measures.]. First, given that civil conflicts and a tactic choice are regionally clustered, we estimate an additional model on the Middle East and North Africa (MENA) and Sub-Saharan Africa countries subsample, where violent campaigns are more expected than in other regions. For the full sample, there are `r round(sum(df$NVC2.1_VIOL) / nrow(df) * 100, 1)`% of violent campaigns, whilst for MENA \& Sub-Saharan Africa there are `r round(sum(df[df$region %in% c('Middle East & North Africa', 'Sub-Saharan Africa'),]$NVC2.1_VIOL) / nrow(df[df$region %in% c('Middle East & North Africa', 'Sub-Saharan Africa'),]) * 100, 1)`% of them. Second, following Bell and Jones [-@bell2015explaining], we estimate an alternative Within-Between Random Effect (REWB) model specification. REWB presents a main independent variable in two forms: its demeaned form and a group mean. De-meaning allows to estimate a *within* (essentially fixed) effect and save the underlying assumption of the varying intercept model. Thirdly, simulation-based cross-validation was employed to assess the stability of coefficient estimates across repeated subsamples. Finally, for Hypothesis 1, we use an alternative operationalization of ethnic elite fragmentation via ethnic groups in power counts^[Despite rejecting ethnic groups counts as the main operationalization of ethnic elite fragmentation, such a measurement can also be found in the literature [@Bivens26]]. Across these alternative specifications and samples, the substantive conclusions remained unchanged, providing additional confidence in the robustness of the findings.
+
+```{r subsample-models, fig.cap="Simulated first differences for a violent tactic choice between shared and concentrated ethnic executive power", fig.align = 'center', out.width="85%", include = TRUE}
+### Hypothesis 1: Regional sub-sample model (MENA & Sub-Saharan Africa)
+## Estimate logistic mixed-effects model for restricted regional sample
+model1_africa <- glmer(
+  formula_h1,
+  family = binomial(link = "logit"),
+  data = filter(df, region %in% c("Middle East & North Africa",
+                                  "Sub-Saharan Africa")),
+  control = glmerControl(
+    optimizer = "bobyqa",
+    optCtrl = list(maxfun = 2e5)
+  )
+)
+
+### Simulated predicted probabilities for Hypothesis 1
+## Add model label to full-sample simulation output for plotting comparison
+ova_ifi_full_m1 <- ova_ifi_full_m1 %>%
+  mutate(model = "Model 1: Full Sample\n(0 = fully concentrated, 1 = fully fragmented)")
+
+## Run OVA simulation for regional subsample (IFI effect)
+ova_ifi_africa_m1 <- sim_ova_range(
+  model1_africa,
+  focal_var = "epr_IFI_l",
+  nsim = simulation_number,
+  vcov_matrix = vcov(model1_africa)
+)$result %>%
+  mutate(model = "Model 1: MENA & Sub-Saharan Africa\n(0 = fully concentrated, 1 = fully fragmented)")
+
+
+### Hypothesis 2: Regional sub-sample model (executive power sharing)
+## Estimate logistic mixed-effects model for regional subsample
+model2_africa <- glmer(
+  formula_h2,
+  family = binomial(link = "logit"),
+  data = filter(
+    df,
+    region %in% c("Middle East & North Africa",
+                  "Sub-Saharan Africa")
+  ),
+  control = glmerControl(
+    optimizer = "bobyqa",
+    optCtrl = list(maxfun = 2e5)
+  )
+)
+
+### Simulated first differences for Hypothesis 2
+## Store full-sample first-difference simulation results with label
+fd_df_full_m2 <- data.frame(fd = ova_fd_full_m2$sims) %>% 
+  mutate(model = "Model 2: Full Sample\n(0 = monopoly, 1 = executive sharing)")
+
+## Run OVA first-difference simulation for regional subsample
+ova_fd_africa_m2 <- sim_ova_fd(model2_africa, focal_var = "epr_highest_rank", 
+                             val1 = 0, val2 = 1,
+                             nsim = simulation_number, vcov_matrix = vcov(model2_africa))
+
+## Convert regional first-difference simulation output to data frame and label
+fd_df_africa_m2 <- data.frame(fd = ova_fd_africa_m2$sims) %>% 
+  mutate(model = "Model 2: MENA & Sub-Saharan Africa\n(0 = monopoly, 1 = executive sharing)")
+
+### Combine full-sample and regional simulation outputs
+ova_combined <- bind_rows(ova_ifi_full_m1, ova_ifi_africa_m1)
+fd_combined <- bind_rows(fd_df_full_m2, fd_df_africa_m2)
+
+### Visualization: OVA predicted probabilities
+## Plot predicted probability of violent campaign across IFI values
+p1 <- ggplot(ova_combined, aes(x = focal_value, y = mean)) +
+  geom_line(linewidth = 0.9, color = "#C0392B") +
+  geom_ribbon(aes(ymin = lower, ymax = upper),
+              alpha = 0.15, fill = "#C0392B", color = NA) +
+  geom_hline(yintercept = 0.5, linetype = "dashed",
+             color = "grey50", linewidth = 0.5) +
+  geom_rug(data = df %>% drop_na(epr_IFI_l),
+           aes(x = epr_IFI_l),
+           inherit.aes = FALSE,
+           color = "#C0392B", alpha = 0.3, sides = "b") +
+  facet_wrap(~model, ncol = 2) +
+  labs(x = "IFI (0 = concentrated, 1 = fragmented)",
+       y = "Predicted Probability of a \n Violent Campaign") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        strip.text        = element_text(size = 8))
+
+### Visualization: first differences (executive power sharing)
+p2 <- ggplot(fd_combined, aes(x = fd)) +
+  geom_histogram(fill = "#C0392B", alpha = 0.3,
+                 color = "#C0392B", bins = 50) +
+  geom_vline(data = fd_combined %>%
+               group_by(model) %>%
+               summarise(mean  = mean(fd),
+                         lower = quantile(fd, 0.025),
+                         upper = quantile(fd, 0.975)),
+             aes(xintercept = mean),
+             color = "#C0392B", linewidth = 0.9) +
+  geom_vline(data = fd_combined %>%
+               group_by(model) %>%
+               summarise(lower = quantile(fd, 0.025),
+                         upper = quantile(fd, 0.975)) %>%
+               pivot_longer(c(lower, upper), values_to = "x"),
+             aes(xintercept = x),
+             color = "#C0392B", linewidth = 0.7, linetype = "dashed") +
+  geom_vline(xintercept = 0,
+             color = "grey40", linewidth = 0.6, linetype = "dotted") +
+  facet_wrap(~model, ncol = 2) +
+  labs(x = "First differences for a violent tactic choice \n between shared and concentrated ethnic executive power configurations",
+       y = "Count") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        strip.text        = element_text(size = 8))
+
+### Combine plots and add simulation caption
+p1 / p2 +
+  plot_annotation(
+    caption = paste0(format(simulation_number, big.mark = ","),
+                     " simulations, 95% CI"),
+    theme   = theme(
+      plot.title   = element_text(face = "bold", size = 12),
+      plot.caption = element_text(color = "grey50", hjust = 1)
+    )
+  )
+```
+Figure \@ref(fig:subsample-models) displays the results of regional subsampling robustness checks. For a Model 1 robustness check, the IFI coefficient remains insignificant, though the effect of the IFI on the violent choice is much stronger. The confidence intervals stay above the empirical probability of the violent choice across most of the IFI range, proving our assumption that in specific regions the effect of the IFI is more pronounced and better identified. For a Model 2 robustness check, the mean first difference is slightly shifted rightward, though the confidence intervals cross zero as well as in the full sample, suggesting the robustness of the H2 findings. 
+
+```{r h1-REWB-model, fig.cap="Simulated predicted probabilities of a violent tactic choice over a range of IFI values - baseline vs. REWB", fig.align = 'center', out.width="85%", include = TRUE}
+### Robustness check: comparing RE vs REWB specification for Hypothesis 1 ###
+
+## Add model type label to baseline RE simulation results
+ova_ifi_full_m1 <- ova_ifi_full_m1 %>% mutate(type = "RE")
+
+### Estimate Random Effects Within-Between (REWB) logistic model
+## Specify REWB model separating within-country and between-country variation
+rewb_model <- glmer(NVC2.1_VIOL ~
+                      demeaned_IFI + mean_IFI +
+                      demeaned_EFI + mean_EFI +
+                      log_gdp_pcap_l + pop_log_l +
+                      v2x_execorr_l + v2x_polyarchy_l +
+                      log_v2regdur_l + peace_years_l +
+                      (1 | cow),
+                    data   = df,
+                    family = binomial("logit"))
+
+### Handle convergence issues using allFit re-estimation
+## Redirect output to avoid clutter during multi-optimizer fitting
+sink(tempfile()) 
+
+## Try multiple optimizers to resolve convergence problems
+all_fits_rewb_model <- allFit(rewb_model)
+sink()
+
+## Keep only successfully converged models
+ok_fits  <- all_fits_rewb_model[summary(all_fits_rewb_model)$which.OK]
+
+## Extract log-likelihood values from converged fits
+llik_vals <- sapply(ok_fits, logLik)
+
+## Select best-fitting model (highest log-likelihood)
+rewb_model  <- ok_fits[[which.max(llik_vals)]]
+
+## (Optional diagnostic for convergence checks)
+#rewb_model@optinfo$conv$lme4 #model converged
+
+
+### Simulate predicted probabilities for REWB model
+## Run OVA simulation using between-unit component (mean_IFI)
+ova_ifi_full_rewb  <- sim_ova_range(rewb_model,        
+                                     focal_var = "mean_IFI", 
+                                     nsim = simulation_number,
+                                     vcov_matrix = vcov(rewb_model))$result %>% mutate(type = "REWB")
+
+## Combine RE and REWB model predictions for comparison
+ova_model1_robustness <- bind_rows(
+  ova_ifi_full_m1,
+  ova_ifi_full_rewb
+) %>%
+  mutate(type = factor(type, levels = c(
+    "RE",
+    "REWB"
+  )))
+
+## Extract observed IFI values for RE and REWB specifications separately
+rug_data <- bind_rows(
+  df %>% drop_na(epr_IFI_l) %>%
+    mutate(type = "RE", rug_x = epr_IFI_l),
+  df %>% drop_na(mean_IFI) %>%
+    mutate(type = "REWB", rug_x = mean_IFI)
+) %>%
+  mutate(type = factor(type, levels = c("RE", "REWB")))
+
+### Plot robustness comparison: RE vs REWB
+ggplot(ova_model1_robustness,
+       aes(x = focal_value, y = mean)) +
+  geom_line(linewidth = 0.9, color = "#C0392B") +
+  geom_hline(yintercept = round(sum(df$NVC2.1_VIOL) / nrow(df), 2), 
+             linetype = 'dashed', color = 'grey', alpha = 0.8) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), 
+              alpha = 0.15, fill = "#C0392B", color = NA) +
+  geom_rug(
+    data        = rug_data,
+    aes(x       = rug_x),
+    inherit.aes = FALSE,
+    color       = "#C0392B", alpha = 0.3,
+    sides       = "b"
+  ) + 
+  labs(x     = "IFI (0 = fully concentrated, 1 = fully fragmented)", 
+       y     = "Predicted Probability of a \n Violent Campaign", 
+       caption = paste0(format(simulation_number), " simulations, 95% CI")) +
+  theme_bw() +
+  facet_wrap(~type) + 
+  theme(
+    axis.title.y     = element_text(margin = margin(r = 10)),
+    panel.grid.minor = element_blank(),
+    plot.caption     = element_text(hjust = 1, color = "grey50")
+  )
+```
+Figure \@ref(fig:h1-REWB-model) plots the simulated predicted probabilities over the full range of IFI values for both RE and REWB models (Hypothesis 1). A slight upward trend with confidence intervals crossing the empirical probability of a violent tactic choice for both models suggests the robustness of the findings. You can find a first differences plot between RE and REWB models in Figure \@ref(fig:h2-REWB-model) in Appendix E.
+
+```{r cross-validation-function, include = FALSE, warning=FALSE}
+### Cross-validation function for mixed-effects logit models ###
+# This function performs repeated sub-sampling validation of a multilevel logit model
+# and aggregates results across successfully converged estimations
+
+cross_validation_fun_glmer <- function(validation_number = 50,
+                                       data,
+                                       dep_var,
+                                       main_iv) {
+  
+  ## Construct regression formula dynamically
+  formula_obj <- as.formula(
+    paste(
+      dep_var,
+      "~",
+      main_iv,
+      "+ epr_EFI_l + log_gdp_pcap_l +",
+      "egip_participated_l + pop_log_l +",
+      "v2x_polyarchy_l + v2x_execorr_l +",
+      "log_v2regdur_l + peace_years_l +",
+      "(1 | cow)"
+    ))
+  
+  ## Split data into positive and negative outcome groups
+  data_realizations    <- data[data[[dep_var]] == 1, ]
+  data_nonrealizations <- data[data[[dep_var]] == 0, ]
+  
+  ## Fit full-sample model for reference structure
+  test_fit   <- glmer(formula_obj, family = binomial("logit"), data = data,
+                      control = glmerControl(optimizer = "bobyqa",
+                                             optCtrl   = list(maxfun = 2e5)))
+   ## Store coefficient structure
+  coef_names <- names(fixef(test_fit))
+  n_coefs    <- length(coef_names)
+  
+  ## Pre-allocate for target number of CONVERGED models
+  ## Matrix for coefficient estimates across converged runs
+  coefs_matrix <- matrix(NA, nrow = validation_number, ncol = n_coefs)
+  
+  ## Matrix for variance estimates across converged runs
+  var_matrix   <- matrix(NA, nrow = validation_number, ncol = n_coefs)
+  
+  ## Assign column names for interpretability
+  colnames(coefs_matrix) <- coef_names
+  colnames(var_matrix)   <- coef_names
+  
+  ## Initialize counters for iterative validation loop
+  n_converged  <- 0                        # converged iterations collected
+  n_attempts   <- 0                        # total attempts made
+  max_attempts <- validation_number * 10   # stop if too many failures
+  current_seed <- 1
+  
+  ## Repeated sub-sampling and model fitting loop
+  while (n_converged < validation_number && n_attempts < max_attempts) {
+    
+    n_attempts   <- n_attempts + 1    # Track total attempts
+    set.seed(current_seed)            # Set seed
+    current_seed <- current_seed + 1
+    
+    ## Sample 2/3 of positive cases
+    samp1 <- sample(1:nrow(data_realizations),
+                    size = floor(2/3 * nrow(data_realizations)))
+    
+    ## Sample 2/3 of negative cases
+    samp0 <- sample(1:nrow(data_nonrealizations),
+                    size = floor(2/3 * nrow(data_nonrealizations)))
+    
+    ## Combine sampled data into training subset
+    sample_data <- rbind(data_realizations[samp1, ],
+                         data_nonrealizations[samp0, ])
+    
+    ## Fit model on subsample
+    model <- glmer(formula_obj, family = binomial("logit"), data = sample_data,
+                   control = glmerControl(optimizer = "bobyqa",
+                                          optCtrl = list(maxfun = 2e5)))
+    
+    ## Check convergence
+    if (!is.null(model@optinfo$conv$lme4$messages)) {
+      
+      ## Count as successful convergence
+      n_converged <- n_converged + 1
+      
+      ## Extract fixed effects
+      vec_coefs <- fixef(model)
+      
+      ## Extract variance
+      vec_var   <- diag(vcov(model))
+      
+      ## Align coefficient ordering with reference model
+      idx       <- match(names(vec_coefs), coef_names)
+      idx_valid <- !is.na(idx)
+      
+      ## Store results in pre-allocated matrices
+      coefs_matrix[n_converged, idx[idx_valid]] <- vec_coefs[idx_valid]
+      var_matrix[n_converged,   idx[idx_valid]] <- vec_var[idx_valid]
+      
+      ## Print progress update
+      cat("Attempt", n_attempts, "| Converged:", n_converged, "/",
+          validation_number, "\n")
+    } else {
+      cat("Attempt", n_attempts, "| Did not converge — skipping\n")
+    }
+  }
+  
+  ## Report final status
+  if (n_converged < validation_number) {
+    warning(paste0("Only ", n_converged, " of ", validation_number,
+                   " converged models collected after ", 
+                   max_attempts, " attempts."))
+  }
+  
+  ## Trim matrices to actual converged rows
+  coefs_matrix <- coefs_matrix[1:n_converged, , drop = FALSE]
+  var_matrix   <- var_matrix[1:n_converged,   , drop = FALSE]
+  
+  ## Combine estimates using King (2001) aggregation rule
+  mean_coef   <- colMeans(coefs_matrix, na.rm = TRUE)       ## Mean coefficient across runs
+  W           <- colMeans(var_matrix,   na.rm = TRUE)       ## Within-model variance
+  B           <- apply(coefs_matrix, 2, var, na.rm = TRUE)  ## Between-model variance
+  T_var       <- W + (1 + 1 / n_converged) * B              ## Total variance
+  se_combined <- sqrt(T_var)                                ## Combined standard error
+  z_value     <- mean_coef / se_combined                    ## Z-statistics
+  p_value     <- 2 * (1 - pnorm(abs(z_value)))              ## Two-sided p-values
+  
+  ## Add significance coding
+  stars <- ifelse(p_value < 0.001, "***",
+                  ifelse(p_value < 0.01,  "**",
+                         ifelse(p_value < 0.05,  "*",
+                                ifelse(p_value < 0.1,   ".", ""))))
+  
+  ## Output summary table
+  results <- data.frame(
+    Variable     = coef_names,
+    Coefficient  = round(mean_coef,   6),
+    `Std. Error` = round(se_combined, 6),
+    `z value`    = round(z_value,     3),
+    `Pr(>|z|)`   = round(p_value,     4),
+    Sig          = stars,
+    check.names  = FALSE
+  )
+  
+  ## Return full output object
+  return(list(
+    results        = results,
+    combined_coefs = mean_coef,
+    combined_se    = se_combined,
+    coefs_matrix   = coefs_matrix,
+    var_matrix     = var_matrix,
+    n_converged    = n_converged,
+    n_attempts     = n_attempts
+  ))
+}
+```
+
+```{r cross-validation-estimation, include = FALSE, warning=FALSE}
+### Cross-validation execution and comparison setup ##
+## Number of validation resamples to run
+val_num <- 5
+
+## Run cross-validation for both main models
+cv_model1 <- cross_validation_fun_glmer(
+  data = df,
+  dep_var = "NVC2.1_VIOL",
+  validation_number = val_num,
+  main_iv = "epr_IFI_l"
+)
+
+cv_model2 <- cross_validation_fun_glmer(
+  data = df,
+  dep_var = "NVC2.1_VIOL",
+  validation_number = val_num,
+  main_iv = "epr_highest_rank"
+)
+
+### Extract baseline model estimates
+## Fixed effects and standard errors from Model 1
+main_coefs1 <- fixef(model1)
+main_se1    <- sqrt(diag(vcov(model1)))
+
+## Cross-validation aggregated estimates for Model 1
+cv_coefs1   <- cv_model1$combined_coefs
+cv_se1      <- cv_model1$combined_se
+
+## Fixed effects and standard errors from Model 2
+main_coefs2 <- fixef(model2)
+main_se2    <- sqrt(diag(vcov(model2)))
+
+## Cross-validation aggregated estimates for Model 2
+cv_coefs2   <- cv_model2$combined_coefs
+cv_se2      <- cv_model2$combined_se
+
+## Map model variable names to labels for tables
+var_labels <- c(
+  "epr_IFI_l"           = "IFI",
+  "epr_highest_rank"    = "Executive Power Sharing",
+  "epr_EFI_l"           = "EFI",
+  "egip_participated_l" = "Ethnic Group in Power Participation",
+  "log_gdp_pcap_l"      = "ln(GDP per capita)",
+  "pop_log_l"           = "ln(Population)",
+  "v2x_execorr_l"       = "Executive Corruption",
+  "v2x_polyarchy_l"     = "Polyarchy",
+  "log_v2regdur_l"      = "ln(Regime Duration)",
+  "peace_years_l"       = "Peace Years"
+)
+
+### Helper function to format comparison tables
+## Build side-by-side comparison of main model vs cross-validation estimates
+make_block <- function(main_coefs, main_se, cv_coefs, cv_se) {
+  data.frame(
+    Variable = names(main_coefs),
+    Main     = sprintf("%.3f (%.3f)", main_coefs, main_se),
+    CV       = sprintf("%.3f (%.3f)", cv_coefs, cv_se),
+    check.names = FALSE
+  ) |>
+    dplyr::filter(Variable != "(Intercept)") |>
+    dplyr::mutate(Variable = dplyr::recode(Variable, !!!var_labels))
+}
+```
+
+```{r cross-validation, results = 'asis', include = TRUE}
+### Cross-validation results: construct comparison dataset ###
+## Build formatted coefficient tables for both models
+df1 <- make_block(main_coefs1, main_se1, cv_coefs1, cv_se1)
+df2 <- make_block(main_coefs2, main_se2, cv_coefs2, cv_se2)
+
+### Merge Model 1 and Model 2 results into a single comparison table
+## Join both models by variable name
+comparison_df <- full_join(df1, df2, by = "Variable") %>%
+  
+  ## Enforce consistent variable ordering for presentation
+  mutate(
+    Variable = factor(
+      Variable,
+      levels = c(
+        "IFI",
+        "Executive Power Sharing",
+        "EFI",
+        "Ethnic Group in Power Participation",
+        "ln(GDP per capita)",
+        "ln(Population)",
+        "Executive Corruption",
+        "Polyarchy",
+        "ln(Regime Duration)",
+        "Peace Years"
+      )
+    )
+  ) %>%
+  arrange(Variable)
+
+## Rename columns for table presentation
+colnames(comparison_df) <- c(
+  "Variable",
+  "Main",
+  "Cross-Validated",
+  "Main",
+  "Cross-Validated"
+)
+
+## Generate formatted comparison table
+comparison_df %>%
+  kbl(
+    booktabs = TRUE,
+    align    = c("l", "c", "c", "c", "c"),
+    caption  = "Cross-Validation Comparison: Model 1 vs Model 2",
+    label    = "cv-comparison",
+    escape   = FALSE
+  ) %>%
+  add_header_above(
+    c(" " = 1,
+      "Model 1" = 2,
+      "Model 2" = 2)
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width    = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  footnote(
+    general = "Intercept is not reported. Standard errors in parentheses. Cross-validated SE via King (2001) combination rule.",
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  ) %>%
+  landscape()
+```
+
+
+We cross-validate the results (`r val_num` cross-validations) to check whether the same results hold when models are estimated on different random subsamples. For this, we define the `cross_validation_fun` function^[Cross-validation subsampling causes convergence issues due to low sample sizes of the subsamples. To address this, we force the function to resample and reestimate the model until convergence. Thus, it can take more than one attempt to estimate one cross-validated subsample. It took `r cv_model1$n_attempts` attempts for Model 1 and  `r cv_model2$n_attempts` for Model 2 to estimate `r val_num` cross-validations]. For this part, we did not calculate quantities of interest, but rather compare coefficient values and their significance, which will be enough to judge whether the results are stable or not. Table \@ref(tab:cv-comparison) shows the coefficients differences between the main and the cross-validated model. For both models, the IFI coefficient is negative and insignificant, though the coefficient absolute values differ. Moreover, one could notice a slight inflation of the standard errors, though not significantly changing the null result. Moreover, the reader should account for the sample size and respective test sample sizes that partly explain standard errors' inflation.
+
+Finally, we reestimate the model with the count of ethnic groups in power (EGIP). EGIP encompasses groups that exercise political power either via maintaining ethnic dominance or through power-sharing arrangements with junior partners. We log the count, assuming a nonlinear effect on the violent tactic choice. Instead of EFI, we control for the logged count of marginalized ethnic groups - those that are politically excluded from decision making, including both powerless and purposely discriminated groups. Figure \@ref(fig:h1-EGIP) plots the simualted predicted probabilities of a violent tactic choice over the regular EGIP counts^[We exponentiated the logged counts]. Similarly to the results with IFI, there is a slight insignificant upward trend. It once again shows the robustness of the results.
+
+```{r h1-EGIP, fig.cap="Simulated predicted probabilities of a violent tactic choice over Ethnic Groups in Power counts", fig.align = 'center', out.width="85%", include = TRUE}
+### Robustness Check: Ethnic Groups in Power (EGIP) count model specification ###
+## Fit multilevel logistic regression with EGIP counts
+model_egip <- glmer(NVC2.1_VIOL ~ log_epr_egip_groups_count_l + log_epr_excl_groups_count_l + egip_participated_l +
+  log_gdp_pcap_l + pop_log_l + v2x_polyarchy_l + v2x_execorr_l +
+  log_v2regdur_l + peace_years_l + (1 | cow),
+    family = binomial(link = "logit"),
+    data = df)
+
+### Handle convergence issues using allFit re-estimation
+## Redirect output to avoid clutter during multi-optimizer fitting
+sink(tempfile()) 
+
+## Try multiple optimizers to resolve convergence problems
+all_fits_egip <- allFit(model_egip)
+sink()    
+
+## Keep only successfully converged models
+ok_fits  <- all_fits_egip[summary(all_fits_egip)$which.OK]
+
+## Extract log-likelihood values from converged fits
+llik_vals <- sapply(ok_fits, logLik)
+
+## Select best-fitting model (highest log-likelihood)
+model_egip  <- ok_fits[[which.max(llik_vals)]]
+
+## (Optional diagnostic for convergence checks)
+#model2@optinfo$conv$lme4 #model converged
+
+## Create predicted probability using observed value approach (OVA)
+ova_egip_full_m1  <- sim_ova_range(model_egip,        
+                                 focal_var = "log_epr_egip_groups_count_l", 
+                                 nsim = 1000,
+                                 vcov_matrix = vcov(model_egip))$result
+
+## Visualization: Predicted probability across number of ethnic groups in power
+ggplot(ova_egip_full_m1,
+       aes(x = exp(focal_value), y = mean)) +
+  geom_line(linewidth = 0.9, color = "#C0392B") +
+  geom_hline(yintercept = round(sum(df$NVC2.1_VIOL) / nrow(df), 2), 
+             linetype = 'dashed', color = 'grey', alpha = 0.8) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), 
+              alpha = 0.15, fill = "#C0392B", color = NA) +
+  scale_x_continuous(limits = c(NA, 7), breaks = 0:7) +
+  labs(x     = "Ethnic Groups in Power (count)", 
+       y     = "Predicted Probability of a \n Violent Campaign", 
+       caption = "1000 simulations, 95% CI") +
+  theme_bw() +
+  theme(
+    axis.title.y     = element_text(margin = margin(r = 10)),
+    panel.grid.minor = element_blank(),
+    plot.caption     = element_text(hjust = 1, color = "grey50")
+  )
+```
+
+\section{Discussion}
+
+Several theoretical and empirical limitations must be mentioned. First of all, this essay considered the repertoire of contention as a solely binary variable, assuming either a violent or a nonviolent tactic. Even though such a distinction is well-established in the literature, violent flank activity (when a minority of radicalized activists adopt a more violent resistance approach within a primarily nonviolent movement) should also be controlled for in future research. Moreover, campaign onsets themselves can be informationally insufficient. Violent flanks can occur over time and such dynamics of contention should also be addressed.
+
+Secondly, the data structure shapes and constrains the research question. In our essay, we worked with a campaign onset dataset, assuming a campaign start as something endogenous. Maximalist campaign onsets are rare events, and refusing to start the campaign (“no onset”) is also a strategic choice, which should also be modelled. It is possible in case of moving from campaign onset data structure to the country-year structure, allowing for observations without an onset. However, in this case, nonviolent and violent onsets are treated separately and independently, rather than two repertoire choices.
+
+Finally, some methodological concerns should also be mentioned. We used a random effects model to exploit both within- and between-group variations. The RE approach was considered a reasonable compromise between pooling and fixed effects. However, the within-group variation is very close to zero, leading to mostly cross-sectional analysis of tactic choices. This means that time-invariant factors are only partly controlled. We approached this issue with an alternative Within-Between Random Effect estimations, though it is not an ideal methodological cure-all.
+
+\section{Conclusion}
+
+Why do some dissident movements choose violence while others pursue nonviolent resistance? This paper examined whether part of the answer lies in the ethnic composition of ruling elites. Building on political opportunity theories, we argued that ethnic fragmentation and a more equal distribution of power among ruling ethnic groups could weaken elite cohesion, increase the likelihood of defections, reduce the effectiveness of repression, and make concessions more likely. These conditions were expected to increase the attractiveness of nonviolent resistance relative to violent tactics.
+
+Using data on maximalist campaigns from the NAVCO 2.1 project and measures of ethnic power relations from the EPR dataset, we tested whether ethnic elite composition influences campaign tactic choice. The empirical results provide little support for this argument. Neither ethnic fragmentation among ruling elites nor the distribution of power across ruling ethnic groups consistently predicts whether dissidents adopt violent or nonviolent tactics. Moreover, these null findings remain robust across alternative model specifications and subsamples.
+
+These findings are relevant because they challenge a plausible extension of political opportunity theory. Existing research suggests that elite defections, repression, and concessions are important determinants of campaign success and strategic choice. If ethnic fragmentation affects these mechanisms, one might expect it to shape campaign tactics as well. The results presented here suggest that this connection is weaker than anticipated. While ethnic divisions within ruling coalitions may influence regime stability, conflict dynamics, or campaign outcomes, they do not appear to systematically affect the initial choice between violent and nonviolent resistance.
+
+\newpage
+
+# References
+
+<div id="refs"></div>
+
+\newpage
+
+# Appendix {-}
+\appendix
+\renewcommand{\thesection}{\Alph{section}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{A\arabic{figure}}
+\setcounter{table}{0}
+\renewcommand{\thetable}{A\arabic{table}}
+
+## Appendix A: AUC - ROC Curve - Model 1 {#appendix-a}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{A.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{A.\arabic{figure}}
+
+```{r h1-auc-roc-appendix, fig.cap="AUC-ROC Curve - Model 1", fig.align = 'center', out.width="85%", include = TRUE}
+### Train-test split ROC analysis (model performance evaluation)
+
+## Set seed to ensure reproducibility
+set.seed(1234)
+
+### Generate predicted probabilities on test set
+## Predict probabilities using trained model on held-out test data
+pred_test <- predict(model1_train, newdata = df_test,
+                     type = "response",
+                     allow.new.levels = TRUE) # allow prediction for unseen random-effect levels
+
+### Clean prediction and outcome vectors
+## Keep only valid (non-missing) predictions and outcomes
+valid_idx    <- !is.na(pred_test) & !is.na(df_test$NVC2.1_VIOL)
+
+## Extract observed outcomes for test set
+actual_test  <- df_test$NVC2.1_VIOL[valid_idx]
+
+## Extract predicted probabilities for test set
+probs_test   <- pred_test[valid_idx]
+
+
+### Compute ROC curve and AUC
+## Build ROC object
+roc_obj <- roc(response  = actual_test,
+               predictor = probs_test,
+               smooth    = FALSE,
+               quiet     = TRUE)
+
+### Convert ROC object into plottable data frame
+## Extract false positive rate and true positive rate
+roc_df <- data.frame(
+  FPR = 1 - roc_obj$specificities,
+  TPR = roc_obj$sensitivities
+)
+
+
+### Plot ROC curve with AUC annotation
+ggplot(roc_df, aes(x = FPR, y = TPR)) +
+  geom_ribbon(aes(ymin = 0, ymax = TPR),
+              fill = "#C0392B", alpha = 0.08) +
+  geom_line(color = "#C0392B", linewidth = 0.9) +
+  geom_abline(slope     = 1, intercept = 0,
+              linetype  = "dashed", color = "grey60",
+              linewidth = 0.5) +
+  annotate("text",
+           x     = 0.72, y = 0.25,
+           label = paste0("AUC = ", round(auc(roc_obj), 3)),
+           color = "#C0392B", size = 4) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  labs(
+    x       = "False positive rate (1 - Specificity)",
+    y       = "True positive rate (Sensitivity)"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.caption     = element_text(size = 8, color = "grey50", hjust = 1)
+  )
+```
+\newpage
+
+## Appendix B: AUC - ROC Curve - Model 2 {#appendix-b}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{B.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{B.\arabic{figure}}
+
+```{r h2-auc-roc-appendix, fig.cap="AUC-ROC Curve - Model 2", fig.align = 'center', out.width="85%", include = TRUE}
+### Train-test split ROC analysis (model performance evaluation)
+
+## Set seed to ensure reproducibility
+set.seed(1234)
+
+### Generate predicted probabilities on test set
+## Predict probabilities using trained model
+pred_test <- predict(model2_train, newdata = df_test,
+                     type = "response",
+                     allow.new.levels = TRUE)
+
+### Clean prediction and outcome vectors
+## Keep only valid (non-missing) predictions and outcomes
+valid_idx    <- !is.na(pred_test) & !is.na(df_test$NVC2.1_VIOL)
+
+## Extract observed outcomes for test set
+actual_test  <- df_test$NVC2.1_VIOL[valid_idx]
+
+## Extract predicted probabilities for test set
+probs_test   <- pred_test[valid_idx]
+
+### Compute ROC curve and AUC
+## Build ROC object
+roc_obj <- roc(response  = actual_test,
+               predictor = probs_test,
+               smooth    = FALSE,      
+               quiet     = TRUE)
+
+### Convert ROC object into plottable data frame
+## Extract false positive rate and true positive rate
+roc_df <- data.frame(
+  FPR = 1 - roc_obj$specificities,
+  TPR = roc_obj$sensitivities
+)
+
+### Plot ROC curve with AUC annotation
+ggplot(roc_df, aes(x = FPR, y = TPR)) +
+  geom_ribbon(aes(ymin = 0, ymax = TPR),
+              fill = "#C0392B", alpha = 0.08) +
+  geom_line(color = "#C0392B", linewidth = 0.9) +
+  geom_abline(slope     = 1, intercept = 0,
+              linetype  = "dashed", color = "grey60",
+              linewidth = 0.5) +
+  annotate("text",
+           x     = 0.72, y = 0.25,
+           label = paste0("AUC = ", round(auc(roc_obj), 3)),
+           color = "#C0392B", size = 4) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  labs(
+    x       = "False positive rate (1 - Specificity)",
+    y       = "True positive rate (Sensitivity)"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.caption     = element_text(size = 8, color = "grey50", hjust = 1)
+  )
+```
+\newpage
+
+## Appendix C: Model 1 and 2 regression coefficients {#appendix-c}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{C.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{C.\arabic{figure}}
+
+```{r base-model-table, results='asis', include = TRUE}
+### Create table for base models ###
+## Map raw variable names to human-readable labels for table
+coef_map <- c(
+  "epr_IFI_l" = "IFI",
+  "epr_highest_rank" = "Executive Power Sharing",
+  "epr_EFI_l" = "EFI",
+  "egip_participated_l" = "Ethnic Group in Power Participation",
+  "log_gdp_pcap_l" = "ln(GDP per capita)",
+  "pop_log_l" = "ln(Population)",
+  "v2x_polyarchy_l" = "Polyarchy",
+  "v2x_execorr_l" = "Executive Corruption",
+  "log_v2regdur_l" = "ln(Regime Duration)",
+  "peace_years_l" = "Peace Years"
+)
+
+## Compare main models for Hypotheses 1 and 2 in a single table
+modelsummary(
+  list(
+    "H1" = model1,
+    "H2" = model2
+  ),
+  coef_map = coef_map,
+  statistic = "std.error",
+  stars = c('*' = .05, '**' = .01, '***' = .001),
+  gof_map = c(
+    "nobs",
+    "AIC",
+    "BIC",
+    "logLik"
+  ),
+  output = "kableExtra",
+  label = "base-model-table",
+  title = "Mixed-Effects Logistic Regression Models"
+) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width = FALSE
+  ) %>%
+  footnote(
+    general = paste(
+      "Standard errors are reported in parentheses.",
+      "Country random intercepts are included in all models."
+    ),
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  )
+```
+
+\newpage
+
+## Appendix D: Assumptions diagnostics {#appendix-d}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{D.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{D.\arabic{figure}}
+
+```{r app-vif, results='asis', include = TRUE}
+### Check multicollinearity using Variance Inflation Factors (VIF)
+
+## Compute VIFs for Model 1
+vif_m1 <- vif(model1)
+
+## Compute VIFs for Model 2
+vif_m2 <- vif(model2)
+
+## Build unified variable list across both models
+all_vars <- union(names(vif_m1), names(vif_m2))
+
+## Create base structure for VIF comparison table
+vif_compare <- data.frame(
+  Variable = all_vars,
+  check.names = FALSE
+)
+
+## Extract VIFs for Model 1
+vif_compare$`Model 1 (H1)` <- round(
+  as.numeric(vif_m1[match(all_vars, names(vif_m1))]),
+  2
+)
+
+## Extract VIFs for Model 2
+vif_compare$`Model 2 (H2)` <- round(
+  as.numeric(vif_m2[match(all_vars, names(vif_m2))]),
+  2
+)
+
+## Reorder variables
+vif_compare <- vif_compare %>%
+  mutate(
+    Variable = factor(
+      Variable,
+      levels = c(
+        "epr_IFI_l",
+        "epr_highest_rank",
+        "epr_EFI_l",
+        "egip_participated_l",
+        "log_gdp_pcap_l",
+        "pop_log_l",
+        "v2x_polyarchy_l",
+        "v2x_execorr_l",
+        "log_v2regdur_l",
+        "peace_years_l"
+      )
+    )
+  ) %>%
+  arrange(Variable)
+
+## Replace variable names with readable labels
+vif_compare$Variable <- c(
+  "IFI",
+  "Executive Power Sharing",
+  "EFI",
+  "Ethnic Group in Power Participation",
+  "ln(GDP per capita)",
+  "ln(Population)",
+  "Polyarchy",
+  "Executive Corruption",
+  "ln(Regime Duration)",
+  "Peace Years"
+)
+
+### Generate formatted VIF table
+vif_compare %>%
+  kbl(
+    booktabs = TRUE,
+    align = c("l", "c", "c"),
+    caption = "Variance Inflation Factors",
+    label = "app-vif",
+    col.names = c("Variable", "H1", "H2")
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  pack_rows(
+    "Main Variables",
+    start_row = 1,
+    end_row = 2,
+    bold = TRUE
+  ) %>%
+  pack_rows(
+    "Control Variables",
+    start_row = 3,
+    end_row = 10,
+    bold = TRUE
+  ) %>%
+  footnote(
+    general = "Variance Inflation Factors (VIFs) assess multicollinearity among predictors. Values close to 1 indicate negligible multicollinearity.",
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  )
+```
+
+\newpage
+
+```{r qq-m1, fig.cap='Residual QQ plots (Model 1)', fig.align = 'center', out.width="85%", include = TRUE}
+## Create DHARMa residual simulations
+sim1 <- simulateResiduals(model1)
+
+## Combined diagnostic figure
+plotQQunif(sim1, main = "")
+```
+\newpage
+
+```{r DHARMa-m1, fig.cap="DHARMa residual diagnostics (Model 1)", fig.align = 'center', out.width="85%", include = TRUE}
+## Visual check of residual patterns from simulation object
+plotResiduals(sim1)
+```
+\newpage
+
+```{r qq-m2, fig.cap='Residual QQ plots (Model 2)', fig.align = 'center', out.width="85%", include = TRUE}
+## Create DHARMa residual simulations
+sim2 <- simulateResiduals(model2)
+
+## Combined diagnostic figure
+plotQQunif(sim2, main = "")
+```
+
+\newpage
+
+```{r DHARMa-m2, fig.cap="DHARMa residual diagnostics (Model 2)", fig.align = 'center', out.width="85%", include = TRUE}
+## Visual check of residual patterns from simulation object
+plotResiduals(sim2)
+```
+
+\newpage
+
+```{r influence-diagnostics, results='asis', include = TRUE}
+## Calculate cook's distance
+cook_obs_m1 <- cooks.distance(influence(model1, obs=TRUE))
+
+## Rerun model without influential outliers
+model_obs_m1 <- glmer(formula_h1,
+                data = df[cook_obs_m1 <= 4/length(cook_obs_m1), ],
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa",
+                                       optCtrl = list(maxfun = 2e5))) # apply an optimizer for convergence
+
+
+## Calculate cook's distance
+cook_obs_m2 <- cooks.distance(influence(model2, obs=TRUE))
+
+## Rerun model without influential outliers
+model_obs_m2 <- glmer(formula_h2,
+                data = df[cook_obs_m2 <= 4/length(cook_obs_m2), ],
+                family = binomial(link = "logit"),
+                control = glmerControl(optimizer = "bobyqa",
+                                       optCtrl = list(maxfun = 2e5))) # apply an optimizer for convergence
+
+## Create table
+coef_map <- c(
+  "epr_IFI_l" = "IFI",
+  "epr_highest_rank" = "Executive Power Sharing",
+  "epr_EFI_l" = "EFI",
+  "egip_participated_l" = "Ethnic Group in Power Participation",
+  "log_gdp_pcap_l" = "ln(GDP per capita)",
+  "pop_log_l" = "ln(Population)",
+  "v2x_polyarchy_l" = "Polyarchy",
+  "v2x_execorr_l" = "Executive Corruption",
+  "log_v2regdur_l" = "ln(Regime Duration)",
+  "peace_years_l" = "Peace Years"
+)
+
+## Create table for robustness models after removing influential outliers
+modelsummary(
+  list(
+    "H1" = model_obs_m1,
+    "H2" = model_obs_m2
+  ),
+  coef_map = coef_map,
+  statistic = "std.error",
+  stars = c('*' = .05, '**' = .01, '***' = .001),
+  gof_map = c(
+    "nobs",
+    "AIC",
+    "BIC",
+    "logLik"
+  ),
+  output = "kableExtra",
+  label = "influence-diagnostics",
+  title = "Logistic Models without Influential Outliers"
+) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width = FALSE
+  ) %>%
+  footnote(
+    general = paste(
+      "Standard errors are reported in parentheses.",
+      "Country random intercepts are included in all models."
+    ),
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  )
+
+```
+
+\newpage
+
+```{r splines-models, include=FALSE, warning=FALSE}
+## Check Linearity of continuous predictors on the logit scale
+model1_splines <- glmer(NVC2.1_VIOL ~ ns(epr_IFI_l, df = 3) + ns(epr_EFI_l, df = 3)  + egip_participated_l +
+                          log_gdp_pcap_l + pop_log_l + v2x_polyarchy_l + v2x_execorr_l +
+                          log_v2regdur_l + peace_years_l + (1 | cow),
+                        data = df,
+                        family = binomial(link = "logit"),
+                        control = glmerControl(optimizer = "bobyqa",
+                                               optCtrl = list(maxfun = 2e5)))
+
+#WARNING: A convergence issue occured. Reestiamte a model with a warm start
+sink(tempfile()) 
+all_fits_m1splines <- allFit(model1_splines)
+sink()
+ok_fits  <- all_fits_m1splines[summary(all_fits_m1splines)$which.OK]
+llik_vals <- sapply(ok_fits, logLik)
+model1_splines  <- ok_fits[[which.max(llik_vals)]]
+
+## Check Linearity of continuous predictors on the logit scale
+model2_splines <- glmer(NVC2.1_VIOL ~ ns(epr_highest_rank, df = 3) + ns(epr_EFI_l, df = 3)  + egip_participated_l +
+                          log_gdp_pcap_l + pop_log_l + v2x_polyarchy_l + v2x_execorr_l +
+                          log_v2regdur_l + peace_years_l + (1 | cow),
+                        data = df,
+                        family = binomial(link = "logit"),
+                        control = glmerControl(optimizer = "bobyqa",
+                                               optCtrl = list(maxfun = 2e5)))
+
+#WARNING: A convergence issue occured. Reestiamte a model with a warm start
+sink(tempfile()) 
+all_fits_m2splines <- allFit(model2_splines)
+sink()
+ok_fits  <- all_fits_m2splines[summary(all_fits_m2splines)$which.OK]
+llik_vals <- sapply(ok_fits, logLik)
+model2_splines  <- ok_fits[[which.max(llik_vals)]]
+#Models converged
+#model1_splines@optinfo$conv$lme4
+#model2_splines@optinfo$conv$lme4
+
+## Create dataframe for model fit comparison between base models and spline models
+spline_compare <- data.frame(
+  Model = c(
+    "H1 Baseline",
+    "H1 Splines",
+    "H2 Baseline",
+    "H2 Splines"
+  ),
+  AIC = c(
+    AIC(model1),
+    AIC(model1_splines),
+    AIC(model2),
+    AIC(model2_splines)
+  ),
+  BIC = c(
+    BIC(model1),
+    BIC(model1_splines),
+    BIC(model2),
+    BIC(model2_splines)
+  ),
+  LogLik = c(
+    as.numeric(logLik(model1)),
+    as.numeric(logLik(model1_splines)),
+    as.numeric(logLik(model2)),
+    as.numeric(logLik(model2_splines))
+  )
+) %>%
+  mutate(
+    across(where(is.numeric), ~ round(.x, 1))
+  )
+```
+
+```{r splines-models-table, results='asis', include = TRUE}
+## Create table for model fit comparison between base models and spline models
+spline_compare %>%
+  kbl(
+    booktabs = TRUE,
+    align = c("l", "c", "c", "c"),
+    caption = "Comparison of Baseline and Spline Specifications",
+    label = "splines-models-table"
+  ) %>%
+  kable_styling(
+  latex_options = c("hold_position"),
+  full_width = FALSE,
+  position = "center",
+  font_size = 10
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  pack_rows("Hypothesis 1", 1, 2) %>%
+  pack_rows("Hypothesis 2", 3, 4) %>%
+  footnote(
+    general = paste(
+      "Spline models replace the focal explanatory variable",
+      "with a natural spline specification (df = 3).",
+      "Higher-order spline coefficients are omitted because they lack substantive interpretation.",
+      "Model fit is evaluated using AIC and BIC."
+    ),
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  )
+```
+
+\newpage
+
+```{r random-effects-variance, results='asis', include = TRUE}
+### Random effects summary: country-level heterogeneity
+## Construct table of random intercept variance components for both models
+re_table <- data.frame(
+  Statistic = c(
+    "Country Intercept Variance",
+    "Country Intercept SD"
+  ),
+  
+  ## Extract variance and standard deviation of country random intercept (Model 1)
+  H1 = c(
+    as.numeric(VarCorr(model1)$cow[1]),
+    attr(VarCorr(model1)$cow, "stddev")[1]
+  ),
+  
+  ## Extract variance and standard deviation of country random intercept (Model 2)
+  H2 = c(
+    as.numeric(VarCorr(model2)$cow[1]),
+    attr(VarCorr(model2)$cow, "stddev")[1]
+  )
+)
+
+## Round variance components for readability
+re_table[, 2:3] <- round(re_table[, 2:3], 3)
+
+### Generate formatted random effects table
+re_table %>%
+  kbl(
+    booktabs = TRUE,
+    align = c("l", "c", "c"),
+    caption = "Country-Level Random Intercept Variance",
+    label = "random-effects-variance"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    full_width = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  footnote(
+    general = paste(
+      "Reported values are estimates of the country-level random intercept variance and standard deviation.",
+      "Non-zero variance indicates meaningful between-country heterogeneity."
+    ),
+    general_title = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable = TRUE
+  )
+
+```
+
+\newpage
+
+## Appendix E: First Differences plot: RE and REWB models (Hypothesis 2) {#appendix-e}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{E.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{E.\arabic{figure}}
+
+```{r h2-REWB-model, fig.cap="First differences for a violent tactic choice between shared and concentrated ethnic executive power configurations - baseline vs. REWB", fig.align = 'center', out.width="85%", include = TRUE}
+### Robustness check (Model 2): RE vs REWB specification for executive power sharing
+## Store baseline RE first-difference simulation results
+fd_df_full_m2 <- data.frame(fd = ova_fd_full_m2$sims) %>% mutate(type = "RE")
+
+## Fit random-effects within-between model (decomposes within vs between variation)
+rewb_model <- glmer(NVC2.1_VIOL ~
+                      demeaned_epr_highest_rank +
+                      mean_epr_highest_rank +
+                      demeaned_EFI + mean_EFI +
+                      log_gdp_pcap_l + pop_log_l +
+                      v2x_execorr_l + v2x_polyarchy_l +
+                      log_v2regdur_l + peace_years_l +
+                      (1 | cow),
+                    data   = df,
+                    family = binomial("logit"))
+
+#WARNING: A convergence issue occured. Reestiamte a model with a warm start
+sink(tempfile()) 
+all_fits_rewb_model <- allFit(rewb_model)
+sink()
+ok_fits  <- all_fits_rewb_model[summary(all_fits_rewb_model)$which.OK]
+llik_vals <- sapply(ok_fits, logLik)
+rewb_model  <- ok_fits[[which.max(llik_vals)]]
+#rewb_model@optinfo$conv$lme4 #model converged
+
+### Simulate first differences for REWB model
+## Run OVA simulation for between-unit component (mean executive power sharing)
+ova_fd_full_m2_rewb <- sim_ova_fd(rewb_model, focal_var = "mean_epr_highest_rank", 
+                             val1 = 0, val2 = 1,
+                             nsim = simulation_number, vcov_matrix = vcov(rewb_model))
+
+## Convert simulation output into data frame
+fd_df_full_m2_rewb <- data.frame(fd = ova_fd_full_m2_rewb$sims) %>% mutate(type = "REWB")
+
+## Merge both model specifications for comparison
+fd_combined_m2 <- bind_rows(
+  fd_df_full_m2,
+  fd_df_full_m2_rewb
+) %>%
+  mutate(type = factor(type, levels = c(
+    "RE",
+    "REWB"
+  )))
+
+### Plot first-difference distributions
+ggplot(fd_combined_m2, aes(x = fd)) +
+  geom_histogram(fill = "#C0392B", alpha = 0.3,
+                 color = "#C0392B", bins = 50) +
+  geom_vline(data = fd_combined_m2 %>%
+               group_by(type) %>%
+               summarise(mean  = mean(fd),
+                         lower = quantile(fd, 0.025),
+                         upper = quantile(fd, 0.975)),
+             aes(xintercept = mean),
+             color = "#C0392B", linewidth = 0.9) +
+  geom_vline(data = fd_combined_m2 %>%
+               group_by(type) %>%
+               summarise(lower = quantile(fd, 0.025),
+                         upper = quantile(fd, 0.975)) %>%
+               pivot_longer(c(lower, upper), values_to = "x"),
+             aes(xintercept = x),
+             color = "#C0392B", linewidth = 0.7, linetype = "dashed") +
+  geom_vline(xintercept = 0,
+             color = "grey40", linewidth = 0.6, linetype = "dotted") +
+  facet_wrap(~type, ncol = 2) +
+  labs(x = "First differences for a violent tactic choice \n between shared and concentrated ethnic executive power configurations",
+       y = "Count") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        strip.text        = element_text(size = 8))
+```
+\newpage
+
+## Appendix F: Campaigns excluded from the empirical analysis due to country coding issues {#appendix-f}
+
+\setcounter{table}{0}
+\renewcommand{\thetable}{F.\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{F.\arabic{figure}}
+
+```{r lost-campaigns-appendix, include = TRUE}
+### Appendix table: excluded campaign observations due to panel coverage constraints ###
+lost_campaigns_table %>%
+  arrange(country, year) %>%
+  kbl(
+    booktabs  = TRUE,
+    longtable = TRUE,                # allows table to span multiple pages
+    caption   = "Campaigns excluded from the analysis sample due to states panel coverage",
+    label     = "lost-campaigns-appendix",
+    col.names = c("COW code", "Year", "Country"),
+    align     = c("c", "c", "l")
+  ) %>%
+  kable_styling(
+    latex_options = c("striped", "repeat_header"),
+    full_width    = FALSE
+  ) %>%
+  row_spec(0, bold = TRUE) %>%
+  footnote(
+    general           = paste0(
+      "N = ", nrow(lost_campaigns_table), " campaigns. ",
+      "For the reasons of exclusion: see a footnote in the introduction"
+    ),
+    general_title     = "Note:",
+    footnote_as_chunk = TRUE,
+    threeparttable    = TRUE
+  )
+```
+
